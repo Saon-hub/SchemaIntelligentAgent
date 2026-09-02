@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="SchemaIntelligentAgent.Tests/SchemaIntelligentAgent.Tests.csproj" />
+  <Project Path="SchemaIntelligentAgent/SchemaIntelligentAgent.csproj" />
+</Solution>
