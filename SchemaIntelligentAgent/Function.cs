@@ -379,33 +379,23 @@ Use exactly this structure:
     "entities": [
         {
             "entity_name": "Customer",
-
-            "description":
-                "Represents customer master information.",
-
+            "schema_name": "dbo",
+            "table_name": "customer"
+            "description": "Represents customer master information.",
             "category": "MASTER",
-
-            "migration_recommendation":
-                "RECOMMENDED",
-
+            "migration_recommendation": "RECOMMENDED",
             "confidence": 0.97,
-
             "reason": [
                 "Represents core customer information",
                 "Contains a primary key",
                 "Referenced by transaction tables"
             ],
 
-            "tables": [
+            "columns": [
                 {
-                    "schema_name": "dbo",
-                    "table_name": "customer",
-
-                    "role":
-                        "Primary customer table",
-
-                    "migration_recommendation":
-                        "RECOMMENDED"
+                    "column_name": "Id",
+                    "data_type": "int",
+                    "migration_recommendation": "RECOMMENDED"
                 }
             ]
         }

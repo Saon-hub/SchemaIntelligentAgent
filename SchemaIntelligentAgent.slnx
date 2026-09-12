@@ -1,4 +1,6 @@
 <Solution>
+  <Project Path="QueryBuilderAgent/QueryBuilderAgent.csproj" />
+  <Project Path="SchemaComparisonAgent/SchemaComparisonAgent.csproj" />
   <Project Path="SchemaIntelligentAgent.Tests/SchemaIntelligentAgent.Tests.csproj" />
   <Project Path="SchemaIntelligentAgent/SchemaIntelligentAgent.csproj" />
 </Solution>
