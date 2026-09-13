@@ -16,8 +16,7 @@ public class BedrockSchemaComparisonService
 
     public BedrockSchemaComparisonService()
     {
-        _bedrockClient =
-            new AmazonBedrockRuntimeClient();
+        _bedrockClient = new AmazonBedrockRuntimeClient();
     }
 
     public async Task<List<EntityMapping>> CompareSchemasAsync(
@@ -55,11 +54,8 @@ public class BedrockSchemaComparisonService
         var bedrockRequest = new InvokeModelRequest
         {
             ModelId = ModelId,
-
             ContentType = "application/json",
-
             Accept = "application/json",
-
             Body = new MemoryStream(
                 Encoding.UTF8.GetBytes(jsonRequest))
         };
@@ -80,22 +76,15 @@ public class BedrockSchemaComparisonService
     private static string BuildPrompt(
         SchemaComparisonRequest request)
     {
+        // SourceSchema and TargetSchema are database schema/DDL text.
+        // Do NOT JSON serialize them.
         var sourceSchema =
-            JsonSerializer.Serialize(
-                request.SourceSchema,
-                new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+            request.SourceSchema?.Trim();
 
         var targetSchema =
-            JsonSerializer.Serialize(
-                request.TargetSchema,
-                new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+            request.TargetSchema?.Trim();
 
+        // RecommendedMappings may still be structured JSON.
         var recommendedMappings =
             JsonSerializer.Serialize(
                 request.RecommendedMappings,
@@ -108,35 +97,81 @@ public class BedrockSchemaComparisonService
 
         sb.AppendLine("You are SchemaComparisonAgent.");
         sb.AppendLine();
-        sb.AppendLine("Your task is to analyze the SOURCE database schema and TARGET");
-        sb.AppendLine("database schema and create business-entity-level mappings.");
+
+        sb.AppendLine(
+            "Your task is to analyze the SOURCE database schema and TARGET database schema and create business-entity-level mappings.");
+
         sb.AppendLine();
-        sb.AppendLine("SOURCE SCHEMA:");
+
+        sb.AppendLine("SOURCE DATABASE SCHEMA:");
+        sb.AppendLine("----------------------");
         sb.AppendLine(sourceSchema);
         sb.AppendLine();
-        sb.AppendLine("TARGET SCHEMA:");
+
+        sb.AppendLine("TARGET DATABASE SCHEMA:");
+        sb.AppendLine("----------------------");
         sb.AppendLine(targetSchema);
         sb.AppendLine();
+
         sb.AppendLine("RECOMMENDED MAPPINGS:");
+        sb.AppendLine("--------------------");
         sb.AppendLine(recommendedMappings);
         sb.AppendLine();
+
         sb.AppendLine("Instructions:");
         sb.AppendLine();
-        sb.AppendLine("1. Analyze the source and target schemas.");
-        sb.AppendLine("2. Identify logical business entities.");
-        sb.AppendLine("3. Determine the appropriate source-to-target table mappings.");
-        sb.AppendLine("4. Determine the appropriate source-to-target column mappings.");
-        sb.AppendLine("5. Use the recommended mappings as guidance.");
-        sb.AppendLine("6. Do not invent tables or columns that do not exist in the supplied schemas.");
-        sb.AppendLine("7. Group related mappings under the appropriate business entity.");
-        sb.AppendLine("8. Each entity can contain multiple mappings.");
-        sb.AppendLine("9. Return ONLY valid JSON.");
-        sb.AppendLine("10. Do not return markdown.");
-        sb.AppendLine("11. Do not return ```json.");
-        sb.AppendLine("12. Do not add explanations before or after the JSON.");
+
+        sb.AppendLine(
+            "1. Analyze the supplied SOURCE database schema.");
+
+        sb.AppendLine(
+            "2. Analyze the supplied TARGET database schema.");
+
+        sb.AppendLine(
+            "3. The SOURCE and TARGET schemas are database schema definitions/DDL, not JSON objects.");
+
+        sb.AppendLine(
+            "4. Identify logical business entities.");
+
+        sb.AppendLine(
+            "5. Determine the appropriate source-to-target table mappings.");
+
+        sb.AppendLine(
+            "6. Determine the appropriate source-to-target column mappings.");
+
+        sb.AppendLine(
+            "7. Use the recommended mappings as guidance, but validate them against the supplied database schemas.");
+
+        sb.AppendLine(
+            "8. Do not invent tables or columns that do not exist in the supplied schemas.");
+
+        sb.AppendLine(
+            "9. Group related mappings under the appropriate business entity.");
+
+        sb.AppendLine(
+            "10. Each entity can contain multiple mappings.");
+
+        sb.AppendLine(
+            "11. Pay attention to table names, column names, data types, primary keys, foreign keys, relationships and other available schema metadata.");
+
+        sb.AppendLine(
+            "12. Return ONLY valid JSON.");
+
+        sb.AppendLine(
+            "13. Do not return markdown.");
+
+        sb.AppendLine(
+            "14. Do not return ```json.");
+
+        sb.AppendLine(
+            "15. Do not add explanations before or after the JSON.");
+
         sb.AppendLine();
+
         sb.AppendLine("The response must have EXACTLY this structure:");
+
         sb.AppendLine();
+
         sb.AppendLine("[");
         sb.AppendLine("  { \"entity\": \"User\",");
         sb.AppendLine("    \"mappings\": [");
@@ -149,21 +184,47 @@ public class BedrockSchemaComparisonService
         sb.AppendLine("    ]");
         sb.AppendLine("  }");
         sb.AppendLine("]");
+
         sb.AppendLine();
+
         sb.AppendLine("Important:");
         sb.AppendLine();
-        sb.AppendLine("- The root JSON element MUST be an array.");
-        sb.AppendLine("- Each array element MUST contain \"entity\" and \"mappings\".");
-        sb.AppendLine("- \"mappings\" MUST be an array.");
-        sb.AppendLine("- Each mapping MUST contain exactly:");
-        sb.AppendLine("  \"Source_TableName\",");
-        sb.AppendLine("  \"Target_TableName\",");
-        sb.AppendLine("  \"Source_ColumnName\",");
-        sb.AppendLine("  \"Target_ColumnName\".");
-        sb.AppendLine("- Do NOT return a wrapper object.");
-        sb.AppendLine("- Do NOT return \"entities\".");
-        sb.AppendLine("- Do NOT return \"Mappings\" at the root level.");
-        sb.AppendLine("- Return ONLY the JSON array.");
+
+        sb.AppendLine(
+            "- The root JSON element MUST be an array.");
+
+        sb.AppendLine(
+            "- Each array element MUST contain \"entity\" and \"mappings\".");
+
+        sb.AppendLine(
+            "- \"mappings\" MUST be an array.");
+
+        sb.AppendLine(
+            "- Each mapping MUST contain exactly:");
+
+        sb.AppendLine(
+            "  \"Source_TableName\",");
+
+        sb.AppendLine(
+            "  \"Target_TableName\",");
+
+        sb.AppendLine(
+            "  \"Source_ColumnName\",");
+
+        sb.AppendLine(
+            "  \"Target_ColumnName\".");
+
+        sb.AppendLine(
+            "- Do NOT return a wrapper object.");
+
+        sb.AppendLine(
+            "- Do NOT return \"entities\".");
+
+        sb.AppendLine(
+            "- Do NOT return \"Mappings\" at the root level.");
+
+        sb.AppendLine(
+            "- Return ONLY the JSON array.");
 
         return sb.ToString();
     }

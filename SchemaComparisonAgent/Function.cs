@@ -56,23 +56,23 @@ public class Function
                     });
             }
 
-            if (comparisonRequest.SourceSchema == null)
+            if (string.IsNullOrWhiteSpace(comparisonRequest.SourceSchema))
             {
                 return CreateResponse(
                     400,
                     new
                     {
-                        error = "SourceSchema is required."
+                        error = "SourceSchema is required and must contain database schema/DDL."
                     });
             }
 
-            if (comparisonRequest.TargetSchema == null)
+            if (string.IsNullOrWhiteSpace(comparisonRequest.TargetSchema))
             {
                 return CreateResponse(
                     400,
                     new
                     {
-                        error = "TargetSchema is required."
+                        error = "TargetSchema is required and must contain database schema/DDL."
                     });
             }
 
