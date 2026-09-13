@@ -2,6 +2,7 @@
 using Amazon;
 using Amazon.BedrockRuntime;
 using Amazon.BedrockRuntime.Model;
+using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.RuntimeSupport;
 using Amazon.Lambda.Serialization.SystemTextJson;
@@ -19,7 +20,7 @@ namespace SchemaIntelligentAgent
 
 
         // ============================================================
-        // AWS Credentials Initialization
+        // AWS Bedrock Client Initialization
         // ============================================================
 
         private static IAmazonBedrockRuntime InitializeBedrockClient()
@@ -30,13 +31,18 @@ namespace SchemaIntelligentAgent
                     RegionEndpoint.USEast1
                 );
 
-                Console.WriteLine("✓ Bedrock client initialized for us-east-1");
+                Console.WriteLine(
+                    "✓ Bedrock client initialized for us-east-1"
+                );
 
                 return client;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Bedrock initialization failed: {ex}");
+                Console.WriteLine(
+                    $"Bedrock initialization failed: {ex}"
+                );
+
                 throw;
             }
         }
@@ -46,85 +52,121 @@ namespace SchemaIntelligentAgent
         // Lambda Handler
         // ============================================================
 
-        //private static async Task<string> Handler(
-        //    string input,
-        //    ILambdaContext context)
-        //{
-        //    context.Logger.LogInformation(
-        //        "Schema Intelligence Agent started."
-        //    );
-
-        //    if (string.IsNullOrWhiteSpace(input))
-        //    {
-        //        throw new ArgumentException(
-        //            "Schema input cannot be empty."
-        //        );
-        //    }
-
-        //    // --------------------------------------------------------
-        //    // Extract schema from input
-        //    // --------------------------------------------------------
-
-        //    string schema = ExtractSchema(input);
-
-        //    if (string.IsNullOrWhiteSpace(schema))
-        //    {
-        //        throw new ArgumentException(
-        //            "No schema was found in the input."
-        //        );
-        //    }
-
-        //    context.Logger.LogInformation(
-        //        $"Schema received. Length: {schema.Length} characters."
-        //    );
-
-        //    // --------------------------------------------------------
-        //    // Build Bedrock prompt
-        //    // --------------------------------------------------------
-
-        //    string prompt = BuildPrompt(schema);
-
-        //    // --------------------------------------------------------
-        //    // Send schema to Bedrock
-        //    // --------------------------------------------------------
-
-        //    string bedrockResult =
-        //        await AnalyzeSchemaWithBedrock(
-        //            prompt,
-        //            context
-        //        );
-
-        //    // --------------------------------------------------------
-        //    // Return Bedrock result
-        //    // --------------------------------------------------------
-
-        //    return bedrockResult;
-        //}
-
-        private static async Task<string> Handler(SchemaRequest input,ILambdaContext context)
+        private static async Task<APIGatewayProxyResponse> Handler(
+            SchemaRequest input,
+            ILambdaContext context)
         {
-            context.Logger.LogInformation(
-                "Schema Intelligence Agent started.");
-
-            if (input == null || string.IsNullOrWhiteSpace(input.Schema))
+            try
             {
-                throw new ArgumentException(
-                    "Schema input cannot be empty.");
+                context.Logger.LogInformation(
+                    "Schema Intelligence Agent started."
+                );
+
+                if (input == null ||
+                    string.IsNullOrWhiteSpace(input.Schema))
+                {
+                    return CreateResponse(
+                        400,
+                        new
+                        {
+                            error = "Schema input cannot be empty."
+                        }
+                    );
+                }
+
+                string schema = input.Schema;
+
+                context.Logger.LogInformation(
+                    $"Schema received. Length: {schema.Length} characters."
+                );
+
+                // ----------------------------------------------------
+                // Build Bedrock prompt
+                // ----------------------------------------------------
+
+                string prompt = BuildPrompt(schema);
+
+                // ----------------------------------------------------
+                // Send schema to Bedrock
+                // ----------------------------------------------------
+
+                string bedrockResult =
+                    await AnalyzeSchemaWithBedrock(
+                        prompt,
+                        context
+                    );
+
+                // ----------------------------------------------------
+                // Return Bedrock result
+                // ----------------------------------------------------
+
+                return CreateResponse(
+                    200,
+                    JsonDocument.Parse(bedrockResult).RootElement
+                );
             }
+            catch (ArgumentException ex)
+            {
+                context.Logger.LogError(
+                    $"Invalid request: {ex}"
+                );
 
-            string schema = input.Schema;
+                return CreateResponse(
+                    400,
+                    new
+                    {
+                        error = ex.Message
+                    }
+                );
+            }
+            catch (Exception ex)
+            {
+                context.Logger.LogError(
+                    $"Schema analysis failed: {ex}"
+                );
 
-            context.Logger.LogInformation(
-                $"Schema received. Length: {schema.Length} characters.");
+                return CreateResponse(
+                    500,
+                    new
+                    {
+                        error = "Schema analysis failed.",
+                        message = ex.Message
+                    }
+                );
+            }
+        }
 
-            string prompt = BuildPrompt(schema);
 
-            string bedrockResult =
-                await AnalyzeSchemaWithBedrock(
-                    prompt,
-                    context);
+        // ============================================================
+        // API Gateway Response
+        // ============================================================
 
-            return bedrockResult;
+        private static APIGatewayProxyResponse CreateResponse(
+            int statusCode,
+            object body)
+        {
+            return new APIGatewayProxyResponse
+            {
+                StatusCode = statusCode,
+
+                Headers = new Dictionary<string, string>
+                {
+                    ["Content-Type"] = "application/json",
+                    ["Access-Control-Allow-Origin"] = "*",
+                    ["Access-Control-Allow-Headers"] = "Content-Type",
+                    ["Access-Control-Allow-Methods"] = "OPTIONS,POST"
+                },
+
+                Body = body is JsonElement jsonElement
+                    ? jsonElement.GetRawText()
+                    : JsonSerializer.Serialize(
+                        body,
+                        new JsonSerializerOptions
+                        {
+                            WriteIndented = true
+                        }
+                    )
+            };
         }
 
 
@@ -183,6 +225,7 @@ namespace SchemaIntelligentAgent
             {
                 // If it is not valid JSON,
                 // treat it as raw schema.
+
                 return input;
             }
         }
@@ -380,7 +423,7 @@ Use exactly this structure:
         {
             "entity_name": "Customer",
             "schema_name": "dbo",
-            "table_name": "customer"
+            "table_name": "customer",
             "description": "Represents customer master information.",
             "category": "MASTER",
             "migration_recommendation": "RECOMMENDED",
@@ -544,153 +587,12 @@ DATABASE SCHEMA
         public static async Task Main()
         {
             await LambdaBootstrapBuilder
-                .Create<SchemaRequest, string>(
+                .Create<SchemaRequest, APIGatewayProxyResponse>(
                     Handler,
-                    new DefaultLambdaJsonSerializer())
+                    new DefaultLambdaJsonSerializer()
+                )
                 .Build()
                 .RunAsync();
         }
-
-        // ============================================================
-        // Lambda Runtime - Local test
-        // ============================================================
-        //public static async Task Main()
-        //{
-        //    Console.WriteLine("Starting local test...");
-
-        //    try
-        //    {
-        //        var testSchema = """
-        //{
-        //  "schema": "-- Combined MySQL schema for database `store`
-        //-- Source: six uploaded MySQL Workbench dumps
-        //-- Structure only; no INSERT/data statements included.
-
-        //CREATE DATABASE IF NOT EXISTS `store`;
-        //USE `store`;
-
-        //SET FOREIGN_KEY_CHECKS = 0;
-
-        //DROP TABLE IF EXISTS `users`;
-        ///*!40101 SET @saved_cs_client     = @@character_set_client */;
-        ///*!50503 SET character_set_client = utf8mb4 */;
-        //CREATE TABLE `users` (
-        //  `user_id` int NOT NULL AUTO_INCREMENT,
-        //  `username` varchar(255) NOT NULL,
-        //  `password` varchar(255) NOT NULL,
-        //  `email` varchar(255) NOT NULL,
-        //  PRIMARY KEY (`user_id`)
-        //) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=latin1;
-        ///*!40101 SET character_set_client = @saved_cs_client */;
-        //SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
-        ///*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
-
-        //DROP TABLE IF EXISTS `brands`;
-        ///*!40101 SET @saved_cs_client     = @@character_set_client */;
-        ///*!50503 SET character_set_client = utf8mb4 */;
-        //CREATE TABLE `brands` (
-        //  `brand_id` int NOT NULL AUTO_INCREMENT,
-        //  `brand_name` varchar(255) NOT NULL,
-        //  `brand_active` int NOT NULL DEFAULT '0',
-        //  `brand_status` int NOT NULL DEFAULT '0',
-        //  PRIMARY KEY (`brand_id`)
-        //) ENGINE=InnoDB AUTO_INCREMENT=52 DEFAULT CHARSET=latin1;
-        ///*!40101 SET character_set_client = @saved_cs_client */;
-        //SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
-        ///*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
-
-        //DROP TABLE IF EXISTS `categories`;
-        ///*!40101 SET @saved_cs_client     = @@character_set_client */;
-        ///*!50503 SET character_set_client = utf8mb4 */;
-        //CREATE TABLE `categories` (
-        //  `categories_id` int NOT NULL AUTO_INCREMENT,
-        //  `categories_name` varchar(255) NOT NULL,
-        //  `categories_active` int NOT NULL DEFAULT '0',
-        //  `categories_status` int NOT NULL DEFAULT '0',
-        //  PRIMARY KEY (`categories_id`)
-        //) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=latin1;
-        ///*!40101 SET character_set_client = @saved_cs_client */;
-        //SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
-        ///*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
-
-        //DROP TABLE IF EXISTS `product`;
-        ///*!40101 SET @saved_cs_client     = @@character_set_client */;
-        ///*!50503 SET character_set_client = utf8mb4 */;
-        //CREATE TABLE `product` (
-        //  `product_id` int NOT NULL AUTO_INCREMENT,
-        //  `product_name` varchar(255) NOT NULL,
-        //  `product_image` text NOT NULL,
-        //  `brand_id` int NOT NULL,
-        //  `categories_id` int NOT NULL,
-        //  `quantity` varchar(255) NOT NULL,
-        //  `rate` varchar(255) NOT NULL,
-        //  `active` int NOT NULL DEFAULT '0',
-        //  `status` int NOT NULL DEFAULT '0',
-        //  PRIMARY KEY (`product_id`)
-        //) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=latin1;
-        ///*!40101 SET character_set_client = @saved_cs_client */;
-        //SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
-        ///*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
-
-        //DROP TABLE IF EXISTS `orders`;
-        ///*!40101 SET @saved_cs_client     = @@character_set_client */;
-        ///*!50503 SET character_set_client = utf8mb4 */;
-        //CREATE TABLE `orders` (
-        //  `order_id` int NOT NULL AUTO_INCREMENT,
-        //  `order_date` date NOT NULL,
-        //  `client_name` varchar(255) NOT NULL,
-        //  `client_contact` varchar(255) NOT NULL,
-        //  `sub_total` varchar(255) NOT NULL,
-        //  `vat` varchar(255) NOT NULL,
-        //  `total_amount` varchar(255) NOT NULL,
-        //  `discount` varchar(255) NOT NULL,
-        //  `grand_total` varchar(255) NOT NULL,
-        //  `paid` varchar(255) NOT NULL,
-        //  `due` varchar(255) NOT NULL,
-        //  `payment_type` int NOT NULL,
-        //  `payment_status` int NOT NULL,
-        //  `payment_place` int NOT NULL,
-        //  `gstn` varchar(255) NOT NULL,
-        //  `order_status` int NOT NULL DEFAULT '0',
-        //  `user_id` int NOT NULL,
-        //  PRIMARY KEY (`order_id`)
-        //) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=latin1;
-        ///*!40101 SET character_set_client = @saved_cs_client */;
-        //SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
-        ///*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
-
-        //DROP TABLE IF EXISTS `order_item`;
-        ///*!40101 SET @saved_cs_client     = @@character_set_client */;
-        ///*!50503 SET character_set_client = utf8mb4 */;
-        //CREATE TABLE `order_item` (
-        //  `order_item_id` int NOT NULL AUTO_INCREMENT,
-        //  `order_id` int NOT NULL DEFAULT '0',
-        //  `product_id` int NOT NULL DEFAULT '0',
-        //  `quantity` varchar(255) NOT NULL,
-        //  `rate` varchar(255) NOT NULL,
-        //  `total` varchar(255) NOT NULL,
-        //  `order_item_status` int NOT NULL DEFAULT '0',
-        //  PRIMARY KEY (`order_item_id`)
-        //) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=latin1;
-        ///*!40101 SET character_set_client = @saved_cs_client */;
-        //SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
-        ///*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
-
-        //SET FOREIGN_KEY_CHECKS = 1;
-        //"
-        //}
-        //""";
-
-        //        var result = await Handler(testSchema, new LocalLambdaContext());
-
-        //        Console.WriteLine("========== RESULT ==========");
-        //        Console.WriteLine(result);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine("========== ERROR ==========");
-        //        Console.WriteLine(ex.ToString());
-        //    }
-        //}
     }
 }

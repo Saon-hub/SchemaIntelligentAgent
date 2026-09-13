@@ -163,7 +163,10 @@ public class Function
             StatusCode = statusCode,
             Headers = new Dictionary<string, string>
             {
-                ["Content-Type"] = "application/json"
+                ["Content-Type"] = "application/json",
+                ["Access-Control-Allow-Origin"] = "*",
+                ["Access-Control-Allow-Headers"] = "Content-Type",
+                ["Access-Control-Allow-Methods"] = "OPTIONS,POST"
             },
             Body = JsonSerializer.Serialize(
                 body,

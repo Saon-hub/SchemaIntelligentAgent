@@ -56,33 +56,42 @@ public class Function
                     });
             }
 
-            if (string.IsNullOrWhiteSpace(comparisonRequest.SourceSchema))
+            // SourceSchema must contain actual database schema / DDL.
+            if (string.IsNullOrWhiteSpace(
+                    comparisonRequest.SourceSchema))
             {
                 return CreateResponse(
                     400,
                     new
                     {
-                        error = "SourceSchema is required and must contain database schema/DDL."
+                        error =
+                            "SourceSchema is required and must contain database schema/DDL."
                     });
             }
 
-            if (string.IsNullOrWhiteSpace(comparisonRequest.TargetSchema))
+            // TargetSchema must contain actual database schema / DDL.
+            if (string.IsNullOrWhiteSpace(
+                    comparisonRequest.TargetSchema))
             {
                 return CreateResponse(
                     400,
                     new
                     {
-                        error = "TargetSchema is required and must contain database schema/DDL."
+                        error =
+                            "TargetSchema is required and must contain database schema/DDL."
                     });
             }
 
+            // RecommendedMappings contains source tables/entities
+            // that should be analyzed.
             if (comparisonRequest.RecommendedMappings == null)
             {
                 return CreateResponse(
                     400,
                     new
                     {
-                        error = "RecommendedMappings is required."
+                        error =
+                            "RecommendedMappings is required."
                     });
             }
 
@@ -138,7 +147,10 @@ public class Function
 
             Headers = new Dictionary<string, string>
             {
-                ["Content-Type"] = "application/json"
+                ["Content-Type"] = "application/json",
+                ["Access-Control-Allow-Origin"] = "*",
+                ["Access-Control-Allow-Headers"] = "Content-Type",
+                ["Access-Control-Allow-Methods"] = "OPTIONS,POST"
             },
 
             Body = JsonSerializer.Serialize(body),
